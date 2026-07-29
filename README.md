@@ -1,9 +1,12 @@
 # 🔐 Encryption / Decryption App (ROT‑13)
 
-A small **Java Swing** desktop application that encrypts and decrypts text using the classic
-**ROT‑13** substitution cipher. Type a message, hit **Convert**, and watch each letter rotate 13
-places around the alphabet. Because ROT‑13 is its own inverse, the *same* operation both scrambles
-and unscrambles text.
+A small **Python** project that encrypts and decrypts text using the classic **ROT‑13**
+substitution cipher. It ships with **two front ends** on top of one tiny, tested core module:
+
+- 🖥️ a **Tkinter GUI** (`main.py`) — type a message, hit **Convert**, watch each letter rotate
+- ⌨️ a **command-line interface** (`python -m rot13.cli`) — great for pipes and scripting
+
+Because ROT‑13 is its own inverse, the *same* operation both scrambles and unscrambles text.
 
 ---
 
@@ -11,9 +14,10 @@ and unscrambles text.
 
 - 🔤 Encrypt plain text into ROT‑13 cipher text
 - 🔓 Decrypt ROT‑13 cipher text back to plain text
-- 🖱️ Clean two‑field Swing GUI (`Encrypt`, `Decrypt`, `Result`)
-- 🧹 **Clear** button to reset the form
-- 🛡️ Input validation — only letters and spaces are accepted
+- 🖱️ Clean Tkinter GUI (`Encrypt`, `Decrypt`, `Result` fields + `Convert` / `Clear`)
+- ⌨️ Scriptable CLI that reads arguments or standard input
+- 🛡️ Input validation — only letters and spaces are accepted (raises `ValueError`)
+- 🧪 Unit tests for the core cipher (`unittest`)
 
 ---
 
@@ -41,36 +45,40 @@ flowchart LR
 
 ## 🔄 How It Works
 
-The app decides whether to encrypt or decrypt based on which text field you filled in. Each
-character is checked, then shifted using its ASCII value.
+The core lives in `rot13/cipher.py`. Rather than looping character-by-character, it builds a single
+**translation table** once with `str.maketrans` and applies it with `str.translate` — fast, concise
+and Pythonic.
+
+```python
+_ROT13_TABLE = str.maketrans(
+    string.ascii_uppercase + string.ascii_lowercase,
+    (string.ascii_uppercase[13:] + string.ascii_uppercase[:13]
+     + string.ascii_lowercase[13:] + string.ascii_lowercase[:13]),
+)
+
+def rot13(text: str) -> str:
+    if not is_valid(text):
+        raise ValueError("Enter alphabets and spaces only!")
+    return text.translate(_ROT13_TABLE)
+```
 
 ```mermaid
 flowchart TD
-    A([Launch App]) --> B[Type text in Encrypt or Decrypt field]
-    B --> C[Click Convert]
-    C --> D{Is the Decrypt field empty?}
-    D -- Yes --> E[Use the Encrypt field as input]
-    D -- No --> F[Use the Decrypt field as input]
-    E --> G[Loop over each character]
-    F --> G
-    G --> H{Letter or space?}
-    H -- No --> I[Show 'Enter alphabets and spaces only']
-    H -- Yes --> J["Rotate letter by 13 positions (ROT-13)"]
-    J --> K[Append to Result]
-    K --> L{More characters?}
-    L -- Yes --> G
-    L -- No --> M[Display Result]
+    A([Input text]) --> B{Letters & spaces only?}
+    B -- No --> C[raise ValueError → GUI shows error dialog]
+    B -- Yes --> D["text.translate(ROT13_TABLE)"]
+    D --> E[Return transformed text]
 ```
 
 ### The rotation rule
-For the first half of each alphabet case (`A–M` / `a–m`) the code **adds 13**; for the second half
-(`N–Z` / `n–z`) it **subtracts 13**. This keeps the result inside the letters `A–Z`/`a–z`.
+For the first half of each alphabet case (`A–M` / `a–m`) the mapping effectively **adds 13**; for the
+second half (`N–Z` / `n–z`) it **subtracts 13**. This keeps every result inside `A–Z` / `a–z`.
 
 ```mermaid
 flowchart LR
     C[Character] --> Q{Which half?}
-    Q -- "A-M / a-m" --> P["char + 13"]
-    Q -- "N-Z / n-z" --> R["char - 13"]
+    Q -- "A-M / a-m" --> P["+13"]
+    Q -- "N-Z / n-z" --> R["-13"]
     P --> O[Rotated letter]
     R --> O
 ```
@@ -80,19 +88,33 @@ flowchart LR
 ## 🚀 Getting Started
 
 ### Prerequisites
-- **JDK 8+**
+- **Python 3.9+** (`python --version`). Tkinter ships with the standard CPython installer.
 
-### Run it
-Open the project in **IntelliJ IDEA** (an `.iml` file is included) and run `Cipher.main()`, or use
-the command line:
+### Run the GUI
 
 ```bash
 # from the repository root
-javac -d out src/Cipher.java
-java -cp out Cipher
+python main.py
 ```
 
-A 500×500 window opens with the encrypt/decrypt fields and the **Convert** / **Clear** buttons.
+A small window opens with the encrypt/decrypt fields and the **Convert** / **Clear** buttons.
+Whichever field you fill in is used as the source text.
+
+### Run the CLI
+
+```bash
+python -m rot13.cli "Hello World"     # -> Uryyb Jbeyq
+echo "Uryyb Jbeyq" | python -m rot13.cli
+
+# or, after `pip install .`, use the installed entry point:
+rot13 "Hello World"
+```
+
+### Run the tests
+
+```bash
+python -m unittest discover -s tests -v
+```
 
 ---
 
@@ -100,25 +122,32 @@ A 500×500 window opens with the encrypt/decrypt fields and the **Convert** / **
 
 ```
 Encryption-Decryption-App/
-├── src/
-│   └── Cipher.java     # Swing UI + ROT-13 encrypt/decrypt logic
-└── App.iml             # IntelliJ IDEA module file
+├── main.py                  # Entry point — launches the Tkinter GUI
+├── pyproject.toml           # Packaging + `rot13` console script
+├── rot13/
+│   ├── __init__.py
+│   ├── cipher.py            # Core ROT-13 transform + validation
+│   ├── cli.py               # argparse command-line interface
+│   └── gui.py               # Tkinter GUI (CipherApp)
+└── tests/
+    └── test_cipher.py       # unittest cases for the core cipher
 ```
 
-### Key components inside `Cipher.java`
-| Element | Responsibility |
-|---------|----------------|
-| `Cipher` (extends `JFrame`) | Builds the window and lays out the panels |
-| `convertButton` listener | Runs the ROT‑13 transform and shows the result |
-| `clearButton` listener | Empties all text fields |
-| Character check | Ensures only alphabets and spaces are processed |
+---
+
+## 🧰 Tech Stack
+
+- **Python 3** — standard library only (no third-party dependencies)
+- **Tkinter** — the desktop GUI
+- **argparse** — the command-line interface
+- **unittest** — tests for the core cipher
 
 ---
 
 ## 💡 Possible Enhancements
-- Support a configurable shift (turn ROT‑13 into a full **Caesar cipher**)
+- Support a configurable rotation amount (ROT‑N, e.g. Caesar cipher)
 - Preserve digits and punctuation instead of rejecting them
-- Add copy‑to‑clipboard for the result
+- Add copy‑to‑clipboard for the result in the GUI
 
 ---
 
